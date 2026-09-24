@@ -1,0 +1,8 @@
+streamlit
+pandas
+openpyxl
+supabase
+folium
+streamlit-geolocation
+streamlit-autorefresh
+streamlit-folium
