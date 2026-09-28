@@ -21,20 +21,24 @@ COL_SIZ = '規模'
 df = pd.read_csv(FILE_NAME, encoding="cp932")
 
 # ----------------------------------------------------
-# 地図タイルの設定（白地図 vs 航空写真）
+# 地図タイルの設定（通常マップ vs 白地図 vs 航空写真）
 # ----------------------------------------------------
 st.title("古墳マップ")
 
-# 切り替え用のラジオボタンをStreamlit上に配置
+# 切り替え用のラジオボタンをStreamlit上に配置（3択に変更）
 map_style = st.radio(
     "表示する地図を選んでください：",
-    ["白地図 (CartoDB)", "航空写真 (Esri World Imagery)"],
+    ["通常マップ (OpenStreetMap)", "白地図 (CartoDB)", "航空写真 (Esri World Imagery)"],
     horizontal=True
 )
 
 API_KEY = "cb1_3oga_1_7ce961523b21f78b38542e16"
 
-if map_style == "白地図 (CartoDB)":
+if map_style == "通常マップ (OpenStreetMap)":
+    tiles_url = "OpenStreetMap"
+    attr = None
+    subdomains = 'abc'
+elif map_style == "白地図 (CartoDB)":
     tiles_url = f"https://{{s}}.basemaps.cartocdn.com/rastertiles/light_nolabels/{{z}}/{{x}}/{{y}}.png?key={API_KEY}"
     attr = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
     subdomains = 'abcd'
