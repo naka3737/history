@@ -3,6 +3,19 @@ import folium
 import pandas as pd  # ExcelやCSVを扱うためのライブラリ
 from streamlit_folium import st_folium
 import streamlit as st
+import base64
+import os
+
+# ★ この行を追加するだけで、同じ画像を何度も変換しなくなります
+@st.cache_data
+def image_to_base64(image_path):
+    if os.path.exists(image_path):
+        with open(image_path, "rb") as img_file:
+            encoded = base64.b64encode(img_file.read()).decode("utf-8")
+            ext = image_path.split('.')[-1].lower()
+            mime = 'image/png' if ext == 'png' else 'image/jpeg'
+            return f"data:{mime};base64,{encoded}"
+    return None
 
 # これを最初に入れると、アプリが全画面幅を使えるようになります
 st.set_page_config(layout="wide")
@@ -16,7 +29,26 @@ COL_LAT = '緯度'
 COL_LON = '経度'
 COL_HIS = '被葬者'
 COL_SIZ = '規模'
+COL_PIC = '画像'
 # ----------------------------------------------------
+
+# 画像をBase64形式に変換する関数
+def image_to_base64(image_path):
+    if os.path.exists(image_path):
+        with open(image_path, "rb") as img_file:
+            encoded = base64.b64encode(img_file.read()).decode("utf-8")
+            # 拡張子に応じたMIMEタイプを判定
+            ext = image_path.split('.')[-1].lower()
+            if ext in ['jpg', 'jpeg']:
+                mime = 'image/jpeg'
+            elif ext == 'png':
+                mime = 'image/png'
+            elif ext == 'gif':
+                mime = 'image/gif'
+            else:
+                mime = 'image/jpeg'
+            return f"data:{mime};base64,{encoded}"
+    return None
 
 # 表データを読み込む
 try:
@@ -86,6 +118,7 @@ for index, row in df.iterrows():
     lon = row[COL_LON]
     his = row[COL_HIS]
     siz = row[COL_SIZ]
+    pic = row[COL_PIC]
 
     # 現在選択されている古墳かどうかを判定
     is_selected = (selected_kofun != "（全体を表示）" and name == selected_kofun)
@@ -98,6 +131,20 @@ for index, row in df.iterrows():
         popup_text = f"<b>{name}</b><br>緯度: {lat}<br>経度: {lon}<br>規模: {siz}"
     else:
         popup_text = f"<b>{name}</b><br>緯度: {lat}<br>経度: {lon}"
+
+    # if pd.notna(pic):
+    #     popup_text += f"<br><img src='{pic}' width='200' style='margin-top:5px; border-radius:4px;'>"
+    #     print(popup_text)
+
+    # 画像ファイルが指定されている場合、Base64に変換して埋め込む
+    if pd.notna(pic) and str(pic).strip() != "":
+        img_path = str(pic).strip()
+        base64_img = image_to_base64(img_path)
+        if base64_img:
+            popup_text += f"<br><img src='{base64_img}' width='200' style='margin-top:5px; border-radius:4px;'>"
+        else:
+            popup_text += f"<br><span style='color:red;'>[画像が見つかりません: {img_path}]</span>"
+
     
     # 選択中のものは色やサイズを目立たせる
     marker_color = '#0055ff' if is_selected else '#cc0000'
