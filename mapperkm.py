@@ -107,9 +107,27 @@ m = folium.Map(
     subdomains=subdomains
 )
 
+# === 【ここから追加】現在位置表示機能（LocateControl） ===
+from folium.plugins import LocateControl
+
+LocateControl(
+    auto_start=False,          # 起動時に自動で現在地を追跡するか（Falseならボタン押下時）
+    position="topleft",        # ボタンの表示位置
+    strings={
+        "title": "現在地を表示",
+        "popup": "現在地はこの周辺です"
+    },
+    locate_options={
+        "maxZoom": 16,
+        "enableHighAccuracy": True
+    }
+).add_to(m)
+# === 【ここまで追加】 ===
+
 # ----------------------------------------------------
 # 表のデータを1行ずつループ処理して地図に追加（安全ガード付き）
 # ----------------------------------------------------
+
 for index, row in df.iterrows():
     name = row[COL_NAME]
     raw_lat = row[COL_LAT]
@@ -130,7 +148,8 @@ for index, row in df.iterrows():
     nen = int(nen)
     sou = row[COL_SOU]
     hon = row[COL_HON]
-    pic = row[COL_PIC]
+   
+
 
     # 現在選択されている寺社かどうかを判定（変数名を selected_jiin で統一）
     is_selected = (selected_jiin != "（全体を表示）" and name == selected_jiin)
@@ -145,14 +164,8 @@ for index, row in df.iterrows():
     else:
         popup_text = f"<b>{name}</b><br>緯度: {lat}<br>経度: {lon}"
 
-    # 画像ファイルが指定されている場合、Base64に変換して埋め込む
-    if pd.notna(pic) and str(pic).strip() != "":
-        img_path = str(pic).strip()
-        base64_img = image_to_base64(img_path)
-        if base64_img:
-            popup_text += f"<br><img src='{base64_img}' width='200' style='margin-top:5px; border-radius:4px;'>"
-        else:
-            popup_text += f"<br><span style='color:red;'>[画像が見つかりません: {img_path}]</span>"
+    if pd.notna(hon):
+        popup_text = popup_text + f"<br>本尊: {hon}"
 
     # 選択中のものは色やサイズを目立たせる
     marker_color = '#0055ff' if is_selected else '#cc0000'
@@ -196,36 +209,39 @@ for index, row in df.iterrows():
 # Streamlit上で地図を表示
 st_folium(m, use_container_width=True, height=600)
 
-st.subheader("📊 古墳の大きさランキング")
+st.subheader("📊 寺社の創建年一覧表示")
+
 
 # ボタンを設置
 if st.button("グラフを表示する"):
-    # 規模データ（COL_SIZ）が文字列の場合を考慮し、数値に変換する処理
-    df["規模_数値"] = (
-        df[COL_SIZ]
+    # 創建年データが文字列の場合を考慮し、数値に変換する処理
+    df["創建年"] = (
+        df[COL_NEN]
         .astype(str)
         .str.extract(r"(\d+)")
         .astype(float)
     )
 
-    # 規模データが存在する行だけに絞り込み、大きい順（降順）に並び替える
-    df_sorted = df.dropna(subset=["創建年"]).sort_values(
+    # 創建年が存在し、かつ 1700年以下のデータに絞り込む
+    df_filtered = df.dropna(subset=["創建年"])
+    df_filtered = df_filtered[df_filtered["創建年"] <= 1700]
+    
+    # 創建年の古い順（昇順）に並び替える
+    df_sorted = df_filtered.sort_values(
         by="創建年", ascending=True
     )
 
-    # 【現在の年を自動取得】Pythonの機能で現在の西暦年（例: 2026）を取得する
-    current_year = datetime.date.today().year
+    if not df_sorted.empty:
+        # グラフ用のデータフレームを作成
+        chart_df = df_sorted[[COL_NAME, "創建年"]].copy()
 
-
+        # 【現在の年を自動取得】Pythonの機能で現在の西暦年（例: 2026）を取得する
+        current_year = datetime.date.today().year
 
         # 現在の年を基準に「現在年 - 創建年」を計算し、古い寺ほど棒が高くなるようにする
+        chart_df["経過年数"] = current_year - chart_df["創建年"]
 
-
-    if not df_sorted.empty:
-    # グラフ用のデータフレームを作成
-        chart_df = df_sorted[[COL_NAME], "創建年"].copy()
-
-            # 項目数に応じてグラフの横幅を動的に拡大（1本あたり約30ピクセルにして余裕を持たせる）
+        # 項目数に応じてグラフの横幅を動的に拡大（1本あたり約30ピクセル）
         dynamic_width = max(800, len(chart_df) * 30)
 
         # Altairを使って横スクロール可能な棒グラフを作成
@@ -235,14 +251,16 @@ if st.button("グラフを表示する"):
             .encode(
                 x=alt.X(
                     COL_NAME,
-                    sort=None,
+                    sort=None,  # 並び順を維持
                     axis=alt.Axis(
-                        labelAngle=-45,
+                        labelAngle=-45,      # 寺院名を斜めにして見やすくする
                         labelOverlap=False,  # ラベルが重なっても間引かずにすべて表示する
                     ),
-                    title="陵墓",
+                    title="寺院名",
                 ),
-                y=alt.Y("規模_数値", title="規模"),
+                # 縦軸に「経過年数（高さ）」を指定
+                y=alt.Y("経過年数:Q", title=f"現在({current_year}年)からの経過年数"),
+                tooltip=[COL_NAME, "創建年", "経過年数"],  # マウスを合わせたときに寺院名と実際の創建年を表示
             )
             .properties(width=dynamic_width, height=450)
         )
@@ -250,8 +268,8 @@ if st.button("グラフを表示する"):
         # use_container_width=False にすることで、枠を超えた分が自動で横スクロールになる
         st.altair_chart(chart, use_container_width=False)
         st.success(
-            f"全 {len(chart_df)} 件のデータをすべて表示しました！左右にスクロールしてご確認ください。"
+            f"1700年以前の全 {len(chart_df)} 件のデータを表示しました（古い寺ほど棒が高くなります）！左右にスクロールしてご確認ください。"
         )
 
     else:
-        st.warning("有効な規模データが見つかりませんでした。")
+        st.warning("1700年以前の有効な創建年データが見つかりませんでした。")
